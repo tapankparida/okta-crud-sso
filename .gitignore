@@ -1,0 +1,16 @@
+.DS_Store
+
+# Java
+backend/target/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Local configuration
+backend/.env
+frontend/.env
+
+# IDEs
+.idea/
+.vscode/

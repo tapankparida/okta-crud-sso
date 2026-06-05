@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: okta-products-postgres
+    environment:
+      POSTGRES_DB: okta_products
+      POSTGRES_USER: okta_user
+      POSTGRES_PASSWORD: okta_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U okta_user -d okta_products"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
