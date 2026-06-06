@@ -9,7 +9,11 @@ frontend/dist/
 
 # Local configuration
 backend/.env
+backend/.env.local
+backend/.env.prod
 frontend/.env
+frontend/.env.local
+frontend/.env.prod
 
 # IDEs
 .idea/

@@ -4,17 +4,14 @@ server:
 spring:
   application:
     name: okta-springboot-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/okta_products}
     username: ${SPRING_DATASOURCE_USERNAME:okta_user}
     password: ${SPRING_DATASOURCE_PASSWORD:okta_password}
   jpa:
-    hibernate:
-      ddl-auto: update
     open-in-view: false
-    properties:
-      hibernate:
-        format_sql: true
 
 app:
   cors:
@@ -22,3 +19,9 @@ app:
 
 spring.security.oauth2.resourceserver.jwt:
   issuer-uri: ${OKTA_ISSUER}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
