@@ -119,8 +119,6 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSElasticBeanstalkFullAccess
       Policies:
         - PolicyName: CodeBuildDeployPolicy
           PolicyDocument:
@@ -161,6 +159,11 @@ Resources:
                   - cloudformation:DescribeStackResources
                   - cloudformation:GetTemplate
                   - cloudformation:ListStackResources
+                  - cloudformation:UpdateStack
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - autoscaling:Describe*
                 Resource: "*"
               - Effect: Allow
                 Action:
