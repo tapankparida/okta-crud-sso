@@ -143,13 +143,14 @@ Resources:
                   - s3:GetObjectAcl
                   - s3:PutBucketPolicy
                   - s3:PutBucketVersioning
+                  - s3:PutObjectAcl
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
                   - !Sub ${ArtifactBucket.Arn}/*
                   - arn:aws:s3:::*
               - Effect: Allow
                 Action:
-                  - ec2:DescribeSecurityGroups
+                  - ec2:Describe*
                 Resource: "*"
               - Effect: Allow
                 Action:
