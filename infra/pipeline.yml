@@ -140,12 +140,17 @@ Resources:
                   - s3:CreateBucket
                   - s3:GetBucketLocation
                   - s3:GetBucketPolicy
+                  - s3:GetObjectAcl
                   - s3:PutBucketPolicy
                   - s3:PutBucketVersioning
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
                   - !Sub ${ArtifactBucket.Arn}/*
                   - arn:aws:s3:::*
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeSecurityGroups
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - cloudformation:DescribeStacks
