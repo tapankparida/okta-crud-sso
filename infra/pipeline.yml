@@ -154,12 +154,7 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - cloudformation:DescribeStacks
-                  - cloudformation:DescribeStackResource
-                  - cloudformation:DescribeStackResources
-                  - cloudformation:GetTemplate
-                  - cloudformation:ListStackResources
-                  - cloudformation:UpdateStack
+                  - cloudformation:*
                 Resource: "*"
               - Effect: Allow
                 Action:
