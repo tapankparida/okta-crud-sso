@@ -88,6 +88,7 @@ Resources:
                   - cloudformation:CreateChangeSet
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStackEvents
                   - cloudformation:SetStackPolicy
                   - cloudformation:ValidateTemplate
                 Resource: "*"

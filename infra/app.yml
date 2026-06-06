@@ -117,7 +117,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          SourceSecurityGroupId: !Ref BackendSecurityGroup
+          SourceSecurityGroupId: !GetAtt BackendSecurityGroup.GroupId
 
   Database:
     Type: AWS::RDS::DBInstance
