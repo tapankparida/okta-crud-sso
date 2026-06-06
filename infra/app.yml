@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Okta CRUD application infrastructure - RDS, Elastic Beanstalk, S3, and CloudFront.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+  DBName:
+    Type: String
+    Default: okta_products
+  DBUsername:
+    Type: String
+    Default: okta_user
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+  OktaIssuer:
+    Type: String
+  ElasticBeanstalkSolutionStackName:
+    Type: String
+    Default: 64bit Amazon Linux 2023 v4.12.1 running Corretto 21
+
+Resources:
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-frontend-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        Origins:
+          - Id: FrontendS3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: FrontendS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Elastic Beanstalk backend instances
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS PostgreSQL access from Elastic Beanstalk
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBName: !Ref DBName
+      AllocatedStorage: 20
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      VPCSecurityGroups:
+        - !GetAtt DatabaseSecurityGroup.GroupId
+
+  ElasticBeanstalkServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticbeanstalk.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy
+
+  ElasticBeanstalkInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier
+
+  ElasticBeanstalkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ElasticBeanstalkInstanceRole
+
+  ElasticBeanstalkApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Sub okta-crud-api-${EnvironmentName}
+
+  ElasticBeanstalkEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref ElasticBeanstalkApplication
+      EnvironmentName: !Sub okta-crud-api-${EnvironmentName}
+      SolutionStackName: !Ref ElasticBeanstalkSolutionStackName
+      OptionSettings:
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: !Ref ElasticBeanstalkServiceRole
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref ElasticBeanstalkInstanceProfile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: SecurityGroups
+          Value: !Ref BackendSecurityGroup
+        - Namespace: aws:elasticbeanstalk:environment:process:default
+          OptionName: HealthCheckPath
+          Value: /actuator/health
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SPRING_PROFILES_ACTIVE
+          Value: prod
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SERVER_PORT
+          Value: "8080"
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SPRING_DATASOURCE_URL
+          Value: !Sub jdbc:postgresql://${Database.Endpoint.Address}:${Database.Endpoint.Port}/${DBName}
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SPRING_DATASOURCE_USERNAME
+          Value: !Ref DBUsername
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SPRING_DATASOURCE_PASSWORD
+          Value: !Ref DBPassword
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: APP_CORS_ALLOWED_ORIGINS
+          Value: !Sub https://${FrontendDistribution.DomainName}
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: OKTA_ISSUER
+          Value: !Ref OktaIssuer
+
+Outputs:
+  BackendEndpointUrl:
+    Value: !Sub http://${ElasticBeanstalkEnvironment.EndpointURL}
+  CloudFrontDomainName:
+    Value: !GetAtt FrontendDistribution.DomainName
+  CloudFrontDistributionId:
+    Value: !Ref FrontendDistribution
+  ElasticBeanstalkApplicationName:
+    Value: !Ref ElasticBeanstalkApplication
+  ElasticBeanstalkEnvironmentName:
+    Value: !Ref ElasticBeanstalkEnvironment
+  FrontendBucketName:
+    Value: !Ref FrontendBucket
+  RdsEndpointAddress:
+    Value: !GetAtt Database.Endpoint.Address

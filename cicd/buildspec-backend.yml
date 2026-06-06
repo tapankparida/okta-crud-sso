@@ -1,0 +1,32 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+    commands:
+      - yum install -y jq zip
+  pre_build:
+    commands:
+      - export BACKEND_VERSION="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}-$(date +%Y%m%d%H%M%S)"
+      - export APP_STACK_OUTPUTS="$(aws cloudformation describe-stacks --stack-name "$APP_STACK_NAME" --query 'Stacks[0].Outputs' --output json)"
+      - export EB_APP_NAME="$(echo "$APP_STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ElasticBeanstalkApplicationName") | .OutputValue')"
+      - export EB_ENV_NAME="$(echo "$APP_STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ElasticBeanstalkEnvironmentName") | .OutputValue')"
+  build:
+    commands:
+      - cd backend
+      - mvn clean package
+      - zip -r ../backend-source-bundle.zip Procfile target/okta-springboot-api-0.0.1-SNAPSHOT.jar
+      - cd ..
+  post_build:
+    commands:
+      - aws s3 cp backend-source-bundle.zip "s3://$DEPLOY_ARTIFACT_BUCKET/backend/backend-source-bundle-$BACKEND_VERSION.zip"
+      - aws elasticbeanstalk create-application-version --application-name "$EB_APP_NAME" --version-label "$BACKEND_VERSION" --source-bundle S3Bucket="$DEPLOY_ARTIFACT_BUCKET",S3Key="backend/backend-source-bundle-$BACKEND_VERSION.zip"
+      - aws elasticbeanstalk update-environment --environment-name "$EB_ENV_NAME" --version-label "$BACKEND_VERSION"
+
+artifacts:
+  files:
+    - backend-source-bundle.zip
