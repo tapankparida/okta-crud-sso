@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --mode local",
-    "dev:local": "vite --mode local",
-    "build": "vite build --mode prod",
-    "build:prod": "vite build --mode prod",
+    "dev": "vite",
+    "dev:local": "vite",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint ."
   },
